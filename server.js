@@ -4,7 +4,7 @@ const app = express();
 const bodyParser = require("body-parser");
 const routes = require('./routes');
 const multer = require('multer');
-const sqlite3 = require('sqlite3').verbose();
+const mysql = require('mysql2');
 const fs = require('fs');
 const session = require('express-session');
 
@@ -15,11 +15,29 @@ app.use(session({
   saveUninitialized: true,
 }));
 
+
 app.use('/images', express.static('Images'));
 //app.use(express.static('public'));
 
 // create a database connection
-const db = new sqlite3.Database('mydatabase.db');
+
+const db = mysql.createConnection({
+  host: 'localhost',
+  user: 'root',
+  password: '1234',
+  database: 'petfinder'
+});
+
+//Connect to the database
+db.connect((error) => {
+  if (error) {
+    console.error('Error connecting to MySQL database: ', error);
+  } else {
+    console.log('Connected to MySQL database.');
+  }
+});
+
+
 
 //using multer to upload image in database
 const upload = multer({ dest: '/submitform' });
@@ -49,28 +67,67 @@ app.set('view engine', 'ejs');
 //using routes
 app.use('/', routes);
 
-// serve the image data in response to a HTTP request
-app.get('/image/:id', (req, res) => {
-  const id = req.params.id;
+const images = [
+  // { name: 'image1.jpg', path: './images/image1.jpg' },
+  // { name: 'image2.jpg', path: './images/image2.jpg' },
+  // { name: 'image3.jpg', path: './images/image3.jpg' },
+  // { name: 'image4.jpg', path: './images/image4.jpg' },
+  // { name: 'image5.jpg', path: './images/image5.jpg' },
+  // { name: 'image6.jpg', path: './images/image6.jpg' },
+  // { name: 'image7.jpg', path: './images/image7.jpg' },
+  // { name: 'image8.jpg', path: './images/image8.jpg' },
+  // { name: 'image9.jpg', path: './images/image9.jpg' },
+  // { name: 'image10.jpg', path: './images/image10.jpg' },
+  // { name: 'image11.jpg', path: './images/image11.jpg' },
+  // { name: 'image12.jpg', path: './images/image12.jpg' },
+  // { name: 'images12.jpg', path: './images/images12.jpg' },
+];
 
-  const query = 'SELECT name, data FROM images WHERE id = ?';
-  db.get(query, [id], (err, row) => {
+// images.forEach((data) => {
+//   const data1 = fs.readFileSync(data.path);
+
+//   db.query(
+//     'INSERT INTO images (name, data) VALUES (?, ?)',
+//     [data.name, data1],
+//     (error, results) => {
+//       if (error) {
+//         console.error('Error inserting data into MySQL database: ', error);
+//       } else {
+//         console.log('Data inserted into MySQL database: ', results);
+//       }
+//     }
+//   );
+// });
+
+// serve the image data in response to a HTTP request
+
+app.get('/image/:id', (req, res) => {
+  const id = req.params.id;  
+  db.query('SELECT name, data FROM images WHERE id = ?',[id], (err, row,) => {
+    
+    
     if (err) {
       console.error(err.message);
       res.status(500).send('Internal server error');
-    } else if (!row) {
+    } else if (!row[0]) {
       res.status(404).send('Image not found');
     } else {
-      const name = row.name;
-      const data = row.data;
+      const name = row[0].name;
+      const data = row[0].data;
+     
       res.setHeader('Content-Type', 'image/jpg');
       res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
       res.send(data);
+
     }
   });
 });
 
+  
+
+
 // saving lost form data in database
+
 app.post('/submitform', upload.single('pic'), (req, res) => {
   const name = req.body.name;
   const species = req.body.species;
@@ -88,7 +145,7 @@ app.post('/submitform', upload.single('pic'), (req, res) => {
   console.log(req.file.path)
   const imageData = fs.readFileSync(req.file.path);
 
-  db.run(`INSERT INTO lostdata (name, species, email, datetime, age, gender, pic, userid) VALUES (?, ?, ?, ?, ?, ?,?,?)`, [name, species, email, datetime, age, gender, imageData, userid], function (err) {
+  db.query(`INSERT INTO lostdata (name, species, email, datetime, age, gender, pic, userid) VALUES (?, ?, ?, ?, ?, ?,?,?)`, [name, species, email, datetime, age, gender, imageData, userid], function (err) {
     if (err) {
       return console.log(err.message);
     }
@@ -116,7 +173,7 @@ app.post('/submitform2', upload1.single('pic'), (req, res) => {
   console.log(req.file.path)
   const imageData = fs.readFileSync(req.file.path);
 
-  db.run(`INSERT INTO founddata (name, species, email, datetime, age, gender, pic, userid) VALUES (?, ?, ?, ?, ?, ?,?, ?)`, [name, species, email, datetime, age, gender, imageData, userid], function (err) {
+  db.query(`INSERT INTO founddata (name, species, email, datetime, age, gender, pic, userid) VALUES (?, ?, ?, ?, ?, ?,?, ?)`, [name, species, email, datetime, age, gender, imageData, userid], function (err) {
     if (err) {
       return console.log(err.message);
     }
@@ -133,7 +190,7 @@ app.post('/submitsignup', (req, res) => {
   const password = req.body.password;
   const gender = req.body.gender;
 
-  db.run(`INSERT INTO signupdata (name, email, password, gender) VALUES (?, ?, ?, ?)`, [name, email, password, gender], function (err) {
+  db.query(`INSERT INTO signupdata (name, email, password, gender) VALUES (?, ?, ?, ?)`, [name, email, password, gender], function (err) {
     if (err) {
       return console.log(err.message);
     }
@@ -147,7 +204,7 @@ app.post('/submitsignup', (req, res) => {
 app.post("/login", (req, res) => {
   const { name, password } = req.body;
 
-  db.get('SELECT * FROM signupdata WHERE email = ? and password = ?', [name, password], (err, result) => {
+  db.query('SELECT * FROM signupdata WHERE email = ? and password = ?', [name, password], (err, result) => {
     if (err) {
       return res.send('An error occurred while logging in.');
     }
@@ -156,7 +213,7 @@ app.post("/login", (req, res) => {
       return res.send('Invalid username or password.');
     }
 
-    req.session.user = result.id;
+    req.session.user = result[0].id;
 
     res.render('content');
     // compare the password with the hashed password in the database
@@ -182,12 +239,14 @@ app.get('/about', (req, res) => {
 });
 
 // close the database connection when the server is shut down
-app.on('close', () => {
-  db.close();
-});
+// app.on('close', () => {
+//   db.close();
+// });
+//db.end();
 
 //listening to port(executing server)
 app.listen(3000, () => {
   console.log("server started on port 3000");
 });
+
 
